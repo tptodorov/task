@@ -11,6 +11,7 @@ import (
 	"github.com/zeebo/xxh3"
 
 	"github.com/go-task/task/v3/internal/filepathext"
+	"github.com/go-task/task/v3/internal/logger"
 	"github.com/go-task/task/v3/taskfile/ast"
 )
 
@@ -19,12 +20,14 @@ import (
 type ChecksumChecker struct {
 	tempDir string
 	dry     bool
+	logger  *logger.Logger
 }
 
-func NewChecksumChecker(tempDir string, dry bool) *ChecksumChecker {
+func NewChecksumChecker(tempDir string, dry bool, l *logger.Logger) *ChecksumChecker {
 	return &ChecksumChecker{
 		tempDir: tempDir,
 		dry:     dry,
+		logger:  l,
 	}
 }
 
@@ -51,12 +54,15 @@ func (checker *ChecksumChecker) IsUpToDate(t *ast.Task) (bool, error) {
 	}
 
 	if len(t.Generates) > 0 {
+		// Collect all generates for logging
+		allGenerates := make([]string, 0)
+		
 		// For each specified 'generates' field, check whether the files actually exist
 		for _, g := range t.Generates {
 			if g.Negate {
 				continue
 			}
-			generates, err := glob(t.Dir, g.Glob)
+			generates, err := glob(t.Dir, g.Glob, false)
 			if os.IsNotExist(err) {
 				return false, nil
 			}
@@ -65,6 +71,15 @@ func (checker *ChecksumChecker) IsUpToDate(t *ast.Task) (bool, error) {
 			}
 			if len(generates) == 0 {
 				return false, nil
+			}
+			allGenerates = append(allGenerates, generates...)
+		}
+		
+		// Log all discovered generates
+		if checker.logger != nil && checker.logger.Verbose {
+			checker.logger.VerboseOutf(logger.Cyan, "task: discovered %d generated file(s) for task %q\n", len(allGenerates), t.Task)
+			for _, generate := range allGenerates {
+				checker.logger.VerboseOutf(logger.Cyan, "task:   - %s\n", generate)
 			}
 		}
 	}
@@ -91,6 +106,12 @@ func (c *ChecksumChecker) checksum(t *ast.Task) (string, error) {
 	sources, err := Globs(t.Dir, t.Sources)
 	if err != nil {
 		return "", err
+	}
+	if c.logger != nil && c.logger.Verbose {
+		c.logger.VerboseOutf(logger.Cyan, "task: discovered %d source file(s) for task %q\n", len(sources), t.Task)
+		for _, source := range sources {
+			c.logger.VerboseOutf(logger.Cyan, "task:   - %s\n", source)
+		}
 	}
 
 	h := xxh3.New()

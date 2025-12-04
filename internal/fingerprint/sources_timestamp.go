@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/go-task/task/v3/internal/logger"
 	"github.com/go-task/task/v3/taskfile/ast"
 )
 
@@ -13,12 +14,14 @@ import (
 type TimestampChecker struct {
 	tempDir string
 	dry     bool
+	logger  *logger.Logger
 }
 
-func NewTimestampChecker(tempDir string, dry bool) *TimestampChecker {
+func NewTimestampChecker(tempDir string, dry bool, l *logger.Logger) *TimestampChecker {
 	return &TimestampChecker{
 		tempDir: tempDir,
 		dry:     dry,
+		logger:  l,
 	}
 }
 
@@ -32,9 +35,22 @@ func (checker *TimestampChecker) IsUpToDate(t *ast.Task) (bool, error) {
 	if err != nil {
 		return false, nil
 	}
-	generates, err := Globs(t.Dir, t.Generates)
+	if checker.logger != nil && checker.logger.Verbose {
+		checker.logger.VerboseOutf(logger.Cyan, "task: discovered %d source file(s) for task %q\n", len(sources), t.Task)
+		for _, source := range sources {
+			checker.logger.VerboseOutf(logger.Cyan, "task:   - %s\n", source)
+		}
+	}
+	
+	generates, err := GlobsWithIgnore(t.Dir, t.Generates, false)
 	if err != nil {
 		return false, nil
+	}
+	if checker.logger != nil && checker.logger.Verbose && len(t.Generates) > 0 {
+		checker.logger.VerboseOutf(logger.Cyan, "task: discovered %d generated file(s) for task %q\n", len(generates), t.Task)
+		for _, generate := range generates {
+			checker.logger.VerboseOutf(logger.Cyan, "task:   - %s\n", generate)
+		}
 	}
 
 	timestampFile := checker.timestampFilePath(t)

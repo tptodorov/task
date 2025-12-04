@@ -86,7 +86,7 @@ func IsTaskUpToDate(
 
 	// If no sources checker was given, set up the default one
 	if config.sourcesChecker == nil {
-		config.sourcesChecker, err = NewSourcesChecker(config.method, config.tempDir, config.dry)
+		config.sourcesChecker, err = NewSourcesChecker(config.method, config.tempDir, config.dry, config.logger)
 		if err != nil {
 			return false, err
 		}
